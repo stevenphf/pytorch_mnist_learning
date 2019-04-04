@@ -1,19 +1,22 @@
 #-*-coding:utf-8-*-
 
-# 可视化学习
-
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.utils.data as Data
-import torchvision
-import matplotlib.pyplot as plt
+from torchvision import datasets
+from torchvision import transforms
+#import matplotlib.pyplot as plt
 
-#import torchvision.utils as vutils
+# 可视化
 #import numpy as np
 #import torchvision.models as models
-#from torchvision import datasets
-#from tensorboardX import SummaryWriter
+import torchvision.utils as vutils
+from tensorboardX import SummaryWriter  #
+writer = SummaryWriter()   #定义一个SummaryWriter() 实例
+#log_dir为生成的文件所放的目录，comment为文件名称。默认目录为生成runs文件夹目录。
+
+
 
 torch.manual_seed(1)
 
@@ -22,10 +25,10 @@ BATCH_SIZE = 50
 LR = 0.001
 DOWNLOAD_MNIST = False
 
-train_data = torchvision.datasets.MNIST(
+train_data = datasets.MNIST(
     root='./mnist/', #保存位置
     train=True, #training set
-    transform=torchvision.transforms.ToTensor(), #converts a PIL.Image or numpy.ndarray
+    transform=transforms.ToTensor(), #converts a PIL.Image or numpy.ndarray
                                                  #to torch.FloatTensor(C*H*W) in range(0.0,1.0)
     download=DOWNLOAD_MNIST
 )
@@ -38,7 +41,7 @@ train_data = torchvision.datasets.MNIST(
 
 train_loader = Data.DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
 
-test_data = torchvision.datasets.MNIST(root='./mnist/',train=False)
+test_data = datasets.MNIST(root='./mnist/',train=False)
 test_x = Variable(torch.unsqueeze(test_data.data, dim=1)).type(torch.FloatTensor)[:2000]/255.   #volatile=True
 test_y = test_data.targets[:2000]
 
@@ -84,11 +87,16 @@ for epoch in range(EPOCH):
 
         output = cnn(b_x)
         loss = loss_func(output, b_y)
+
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
         if step % 50 == 0:
+            #可视化
+            writer.add_scalar('data/loss',loss.item(),step)
+
             test_output = cnn(test_x)
             pred_y = torch.max(test_output, 1)[1].data.squeeze()
             # accuracy = sum(pred_y == test_y)/test_y.size(0)/1.0
