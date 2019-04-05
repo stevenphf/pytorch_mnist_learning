@@ -11,7 +11,7 @@ from torchvision import transforms
 # 可视化
 #import numpy as np
 #import torchvision.models as models
-import torchvision.utils as vutils
+#import torchvision.utils as vutils
 from tensorboardX import SummaryWriter  #
 writer = SummaryWriter()   #定义一个SummaryWriter() 实例
 #log_dir为生成的文件所放的目录，comment为文件名称。默认目录为生成runs文件夹目录。
@@ -75,36 +75,58 @@ class CNN(nn.Module):
 
 cnn = CNN()
 # print(cnn)
+
+if torch.cuda.is_available():
+    cnn.cuda()
+
 optimizer = torch.optim.Adam(cnn.parameters(),lr=LR)
 loss_func = nn.CrossEntropyLoss()
+
+
 
 #for (b_x,b_y) in train_loader:
 
 for epoch in range(EPOCH):
-    for step,(x,y) in enumerate(train_loader):
-        b_x = Variable(x)
+    for step,(x,y) in enumerate(train_loader):   # 0~1199
+        b_x = Variable(x)   #50, 1, 28, 28
         b_y = Variable(y)
 
+        if torch.cuda.is_available():
+            b_x = b_x.cuda()
+
+        # 可视化
+        with SummaryWriter(comment='cnn') as w:  # 命名为cnn  ；with 语句，可以避免因w.close未写造成的问题。
+            w.add_graph(cnn, (x,))  # 第一个参数为需要保存的模型，第二个参数为输入值，元祖类型。
+        for name, param in cnn.named_parameters():
+            writer.add_histogram(name, param.clone().cpu().data.numpy(), step)
         output = cnn(b_x)
         loss = loss_func(output, b_y)
 
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        optimizer.zero_grad()   #将梯度初始化为零
+        loss.backward()    #反向传播求梯度
+        optimizer.step()   #更新所有参数
 
         if step % 50 == 0:
             #可视化
-            writer.add_scalar('data/loss',loss.item(),step)
+            writer.add_scalar('data/train_loss',loss.item(),step)
 
             test_output = cnn(test_x)
             pred_y = torch.max(test_output, 1)[1].data.squeeze()
             # accuracy = sum(pred_y == test_y)/test_y.size(0)/1.0
             accuracy = (pred_y == test_y).sum().item()/1.0/test_y.size(0)    # 默认都是int类型
+
+            # 可视化
+            writer.add_scalar('data/test_accuracy', accuracy, step)
+
             # print('Epoch: ', epoch, ' | train loss: %.4f '% loss.item(), ' | accuracy: %.4f'% accuracy)
             print('Epoch: {} | train loss: {:.3f} | accuracy: {:.2%}'.format(epoch, loss.item(),accuracy))
 
-test_output = cnn(test_x[:100])
+#writer.add_scalar('data/train_loss',loss.item(),step)
+#writer.add_scalar('data/test_accuracy', accuracy, step)
+
+test_output = cnn(test_x[:10])
 pred_y = torch.max(test_output,1)[1].data.squeeze()
 print(pred_y,'prediction number')
-print(test_y[:100].numpy(),'real number')
+print(test_y[:10].numpy(),'real number')
+writer.close()
