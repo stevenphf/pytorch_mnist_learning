@@ -1,4 +1,7 @@
 #-*-coding:utf-8-*-
+import time
+print(time.ctime())
+t=time.time()
 
 import torch
 import torch.nn as nn
@@ -6,17 +9,22 @@ from torch.autograd import Variable
 import torch.utils.data as Data
 from torchvision import datasets
 from torchvision import transforms
-#import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 # 可视化
-#import numpy as np
-#import torchvision.models as models
-#import torchvision.utils as vutils
-from tensorboardX import SummaryWriter  #
-writer = SummaryWriter()   #定义一个SummaryWriter() 实例
-#log_dir为生成的文件所放的目录，comment为文件名称。默认目录为生成runs文件夹目录。
+USE_boardX = True
+# USE_boardX = False
 
+if USE_boardX:
+    # import numpy as np
+    # import torchvision.models as models
+    # import torchvision.utils as vutils
+    from tensorboardX import SummaryWriter  #
+    writer = SummaryWriter()   #定义一个SummaryWriter() 实例
+    # log_dir为生成的文件所放的目录，comment为文件名称。默认目录为生成runs文件夹目录。
 
+USE_CUDA = torch.cuda.is_available()
+# USE_CUDA = False
 
 torch.manual_seed(1)
 
@@ -45,6 +53,7 @@ test_data = datasets.MNIST(root='./mnist/',train=False)
 test_x = Variable(torch.unsqueeze(test_data.data, dim=1)).type(torch.FloatTensor)[:2000]/255.   #volatile=True
 test_y = test_data.targets[:2000]
 
+if USE_CUDA: test_x, test_y = test_x.cuda(), test_y.cuda()
 
 class CNN(nn.Module):
     def __init__(self):
@@ -73,43 +82,43 @@ class CNN(nn.Module):
         output = self.out(x)
         return output
 
-cnn = CNN()
+if USE_CUDA:
+    cnn=CNN().cuda()
+else:
+    cnn = CNN()
 # print(cnn)
-
-if torch.cuda.is_available():
-    cnn.cuda()
 
 optimizer = torch.optim.Adam(cnn.parameters(),lr=LR)
 loss_func = nn.CrossEntropyLoss()
 
-
-
-#for (b_x,b_y) in train_loader:
+# for (b_x,b_y) in train_loader:
 
 for epoch in range(EPOCH):
     for step,(x,y) in enumerate(train_loader):   # 0~1199
-        b_x = Variable(x)   #50, 1, 28, 28
-        b_y = Variable(y)
-
-        if torch.cuda.is_available():
-            b_x = b_x.cuda()
+        if USE_CUDA:
+            b_x, b_y = Variable(x).cuda(), Variable(y).cuda()
+        else:
+            b_x, b_y = Variable(x), Variable(y)  #50, 1, 28, 28
 
         # 可视化
-        with SummaryWriter(comment='cnn') as w:  # 命名为cnn  ；with 语句，可以避免因w.close未写造成的问题。
-            w.add_graph(cnn, (x,))  # 第一个参数为需要保存的模型，第二个参数为输入值，元祖类型。
-        for name, param in cnn.named_parameters():
-            writer.add_histogram(name, param.clone().cpu().data.numpy(), step)
+        if USE_boardX:
+            with SummaryWriter(comment='cnn') as w:  # 命名为cnn  ；with 语句，可以避免因w.close未写造成的问题。
+                if USE_CUDA:
+                    w.add_graph(cnn, (x.cuda(),))
+                else:
+                    w.add_graph(cnn, (x,))  # 第一个参数为需要保存的模型，第二个参数为输入值，元祖类型。
+            for name, param in cnn.named_parameters():
+                writer.add_histogram(name, param.clone().cpu().data.numpy(), step)
         output = cnn(b_x)
         loss = loss_func(output, b_y)
-
-
         optimizer.zero_grad()   #将梯度初始化为零
         loss.backward()    #反向传播求梯度
         optimizer.step()   #更新所有参数
 
         if step % 50 == 0:
             #可视化
-            writer.add_scalar('data/train_loss',loss.item(),step)
+            if USE_boardX:
+                writer.add_scalar('data/train_loss',loss.item(),step)
 
             test_output = cnn(test_x)
             pred_y = torch.max(test_output, 1)[1].data.squeeze()
@@ -117,16 +126,31 @@ for epoch in range(EPOCH):
             accuracy = (pred_y == test_y).sum().item()/1.0/test_y.size(0)    # 默认都是int类型
 
             # 可视化
-            writer.add_scalar('data/test_accuracy', accuracy, step)
+            if USE_boardX:
+                writer.add_scalar('data/test_accuracy', accuracy, step)
 
             # print('Epoch: ', epoch, ' | train loss: %.4f '% loss.item(), ' | accuracy: %.4f'% accuracy)
             print('Epoch: {} | train loss: {:.3f} | accuracy: {:.2%}'.format(epoch, loss.item(),accuracy))
 
-#writer.add_scalar('data/train_loss',loss.item(),step)
-#writer.add_scalar('data/test_accuracy', accuracy, step)
+# if USE_boardX:
+# writer.add_scalar('data/train_loss',loss.item(),step)
+# writer.add_scalar('data/test_accuracy', accuracy, step)
 
 test_output = cnn(test_x[:10])
-pred_y = torch.max(test_output,1)[1].data.squeeze()
+if USE_CUDA:
+    pred_y = torch.max(test_output.cpu(), 1)[1].data.squeeze()
+else:
+    pred_y = torch.max(test_output,1)[1].data.squeeze()
+
 print(pred_y,'prediction number')
-print(test_y[:10].numpy(),'real number')
-writer.close()
+
+if USE_CUDA:
+    print(test_y[:10].cpu().numpy(),'real number')
+else:
+    print(test_y[:10].numpy(),'real number')
+
+if USE_boardX:
+    writer.close()
+
+print(time.ctime())
+print(time.time()-t)

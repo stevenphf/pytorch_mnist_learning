@@ -1,10 +1,17 @@
 #-*-coding:utf-8-*-
 
+import time
+print(time.ctime())
+t=time.time()
+
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.utils.data as Data
 import torchvision
+
+USE_CUDA = torch.cuda.is_available()
+# USE_CUDA = False
 
 torch.manual_seed(1)
 
@@ -33,6 +40,7 @@ test_data = torchvision.datasets.MNIST(root='./mnist/',train=False)
 test_x = Variable(torch.unsqueeze(test_data.data, dim=1)).type(torch.FloatTensor)[:2000]/255.   #volatile=True
 test_y = test_data.targets[:2000]
 
+if USE_CUDA: test_x, test_y = test_x.cuda(), test_y.cuda()
 
 class CNN(nn.Module):
     def __init__(self):
@@ -61,8 +69,12 @@ class CNN(nn.Module):
         output = self.out(x)
         return output
 
-cnn = CNN()
+if USE_CUDA:
+    cnn=CNN().cuda()
+else:
+    cnn = CNN()
 # print(cnn)
+
 optimizer = torch.optim.Adam(cnn.parameters(),lr=LR)
 loss_func = nn.CrossEntropyLoss()
 
@@ -70,8 +82,10 @@ loss_func = nn.CrossEntropyLoss()
 
 for epoch in range(EPOCH):
     for step,(x,y) in enumerate(train_loader):
-        b_x = Variable(x)
-        b_y = Variable(y)
+        if USE_CUDA:
+            b_x, b_y = Variable(x).cuda(), Variable(y).cuda()
+        else:
+            b_x, b_y = Variable(x), Variable(y)  #50, 1, 28, 28
 
         output = cnn(b_x)
         loss = loss_func(output, b_y)
@@ -87,7 +101,18 @@ for epoch in range(EPOCH):
             # print('Epoch: ', epoch, ' | train loss: %.4f '% loss.item(), ' | accuracy: %.4f'% accuracy)
             print('Epoch: {} | train loss: {:.3f} | accuracy: {:.2%}'.format(epoch, loss.item(),accuracy))
 
-test_output = cnn(test_x[:100])
-pred_y = torch.max(test_output,1)[1].data.squeeze()
+test_output = cnn(test_x[:10])
+if USE_CUDA:
+    pred_y = torch.max(test_output.cpu(), 1)[1].data.squeeze()
+else:
+    pred_y = torch.max(test_output,1)[1].data.squeeze()
+
 print(pred_y,'prediction number')
-print(test_y[:100].numpy(),'real number')
+
+if USE_CUDA:
+    print(test_y[:10].cpu().numpy(),'real number')
+else:
+    print(test_y[:10].numpy(),'real number')
+
+print(time.ctime())
+print(time.time()-t)
